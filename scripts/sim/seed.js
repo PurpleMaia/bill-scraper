@@ -18,7 +18,7 @@
  */
 
 import { db } from '../../db/kysely/client.js';
-import { ROSTER, SIM_DATES } from '../../server/services/sim/scenarios.js';
+import { COMMITTEES, ROSTER, SIM_DATES } from '../../server/services/sim/scenarios.js';
 import { sentinelUrl, runSimDay } from '../../server/services/sim/simRunner.js';
 import { resolveSimUser, ensureFollow } from '../../server/services/sim/simUsers.js';
 import { seedSimCommittees } from './seed-committees.js';
@@ -54,7 +54,7 @@ async function main() {
     const values = {
       bill_number: bill.billNumber,
       bill_title: bill.title ?? `SIM WEEK — ${bill.simId} (${bill.scenario}${bill.isAuto ? ', auto' : ''})`,
-      committee_assignment: bill.committee,
+      committee_assignment: COMMITTEES.origin,
       description: bill.description ?? 'sim week',
       current_status_string: '',
       bill_status: null,
