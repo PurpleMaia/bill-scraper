@@ -111,7 +111,7 @@ export async function runSimDay(dateStr) {
       const contacted = flags[bill.simId]?.action === 'contact';
       const { stance, support, oppose } = await aggregateStance(row.id);
 
-      const { updates } = buildBillLog(bill, simDay, { contacted, stance });
+      const { updates, dead: engineDead } = buildBillLog(bill, simDay, { contacted, stance });
       await replaceStatusUpdates(row.id, updates);
 
       const oldStatus = row.bill_status ?? null;
@@ -120,8 +120,13 @@ export async function runSimDay(dateStr) {
       // Real deterministic classifier (read-only) -> new stage.
       const newStatus = await classifyStatusWithLLM(row.id);
 
-      // Dead ONLY via explicit committee deferral (not the real deadline path).
-      const newDead = isExplicitlyDeferred(updates);
+      // Dead via explicit committee deferral OR the engine's checkpoint-failure
+      // flag. A bill that dies before any hearing was scheduled (e.g. a
+      // never-contacted scenario-1 bill stuck at `introduced`) has NO deferral
+      // line, so the deferral check alone would miss it — the engine's `dead`
+      // flag carries those. We still never use the real deadline path (sim dates
+      // are after all real session deadlines, spec §6).
+      const newDead = engineDead || isExplicitlyDeferred(updates);
 
       await db.updateTable('bills')
         .set({

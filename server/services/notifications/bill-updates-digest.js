@@ -240,7 +240,7 @@ function hearingTodayBanner(hearing) {
     `<div style="margin-top:12px;padding:10px 14px;border-radius:6px;` +
     `background-color:${COLOR.goldSoft};border:1px solid ${COLOR.gold};">` +
     `<span style="font-size:14px;font-weight:700;color:${COLOR.gold};">Hearing today</span>` +
-    `<span style="font-size:14px;color:${COLOR.text};">${when} — testimony is due now.</span>` +
+    `<span style="font-size:14px;color:${COLOR.text};">${when}. Testimony is due now!</span>` +
     `</div>`
   );
 }
@@ -268,7 +268,7 @@ function effectiveGuidance(change) {
   const base = stageGuidance(change.new_status);
   if (change.hearing_today) {
     return {
-      meaning: 'This bill has a committee hearing today — the testimony window is open now.',
+      meaning: 'This bill has a committee hearing today. The testimony submit window is open now!',
       action: { kind: 'testimony', label: 'Submit testimony' },
     };
   }

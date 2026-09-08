@@ -118,8 +118,14 @@ export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) 
       reachedStage = step.targetStage;
       currentStage = step.targetStage; // advance the tracked stage
     } else {
-      // Checkpoint failed: inject the death line and stop advancing.
-      if (step.deathLine) chron.push(stamp(step.deathLine, date));
+      // Checkpoint failed: the bill dies here and stops advancing. A "deferred
+      // the measure" line only makes narrative sense once a hearing was actually
+      // scheduled — so we insert the deferral death line ONLY when the bill is
+      // currently at a scheduled-hearing stage. A bill that dies while still
+      // introduced (e.g. never contacted, no hearing scheduled) just dies in
+      // place via the `dead` flag, keeping its current stage and inserting no
+      // deferral line.
+      if (step.deathLine && isScheduledStage(currentStage)) chron.push(stamp(step.deathLine, date));
       dead = true;
     }
   }

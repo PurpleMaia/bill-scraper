@@ -72,7 +72,7 @@ function committeeOrdinal(text, order) {
  * ctx: { crossover, bothChambers, order }
  */
 function classifyLine(text, ctx) {
-  const { crossover, bothChambers, bothConferees, order, priorPassageInPhase } = ctx;
+  const { crossover, bothChambers, bothConferees, order, priorPassageInPhase, origin } = ctx;
 
   // ---- Tier 0: terminal / governor ----
   if (/\bAct\s+\d+/i.test(text)) return { stage: 'governorSigns' };
@@ -99,6 +99,22 @@ function classifyLine(text, ctx) {
 
   // ---- Tier 2: passed all committees ----
   if (/Received from (House|Senate).*in amended form/i.test(text)) return { stage: 'passedCommittees' };
+  // OUTBOUND crossover: the ORIGIN chamber passed Third/Final Reading and transmitted the bill to
+  // the OTHER chamber. This line is posted in the origin chamber BEFORE the receiving chamber logs
+  // "Received from ..." — so `crossover` is not yet true from a receiving-chamber line, but the bill
+  // has left its origin chamber. Direction ("Transmitted to the Senate" for an HB) tells us it is
+  // outbound, not the return trip. -> crossoverWaiting1 (stable with rule 4.1 the next scrape).
+  {
+    const tx = text.match(/Passed (?:Third|Final) Reading.*Transmitted to (?:the )?(House|Senate)/i);
+    if (tx) {
+      const dest = tx[1][0].toUpperCase(); // 'H' | 'S'
+      // Outbound iff transmitting to the chamber that is NOT the origin. When origin is unknown,
+      // fall back to the prior crossover-gated behavior below.
+      if (origin && dest !== origin) return { stage: 'crossoverWaiting1' };
+    }
+  }
+  // RETURN trip: after crossover the receiving chamber amends and transmits the bill BACK. Both
+  // chambers have now passed it -> passedCommittees. (Also the fallback when origin is unknown.)
   if (crossover && /Passed (Third|Final) Reading.*Transmitted/i.test(text)) return { stage: 'passedCommittees' };
 
   // "The recommendation was not adopted" NEGATES the immediately-preceding committee
@@ -185,7 +201,7 @@ export function classifyStatus({ billNumber, statusUpdates, currentStatus }) {
     /recommend(?:\(s\)|s)? that the measure be PASSED|recommendation of passage on (Second|Third)/i.test(u.statustext)
   );
 
-  const ctx = { crossover, bothChambers, bothConferees, order, priorPassageInPhase };
+  const ctx = { crossover, bothChambers, bothConferees, order, priorPassageInPhase, origin };
   const unmatched = [];
 
   // Terminal scan first (governor/veto/dead can appear then be followed by admin lines).

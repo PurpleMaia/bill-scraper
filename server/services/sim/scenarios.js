@@ -76,7 +76,7 @@ const scenario1 = {
       targetStage: 'scheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-16-26 2:00PM.` },
+        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-1-26 2:00PM.` },
       ],
       deathLine: deferOrigin,
     },
@@ -105,7 +105,7 @@ const scenario1 = {
       targetStage: 'crossoverScheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-21-26 2:00PM.` },
+        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-4-26 2:00PM.` },
       ],
       deathLine: deferRecv,
     },
@@ -139,7 +139,7 @@ const scenario2 = {
       // hearing AND passes committee the same day, so scenario-2 bills survive the
       // seed regardless of testimony — the life/death gates come later.
       advance: [
-        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-14-26 2:00PM.` },
+        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-1-26 2:00PM.` },
         { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} recommend(s) that the measure be PASSED, unamended.` },
       ],
     },
@@ -158,7 +158,7 @@ const scenario2 = {
       targetStage: 'crossoverScheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-18-26 2:00PM.` },
+        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-1-26 2:00PM.` },
       ],
       deathLine: deferRecv,
     },

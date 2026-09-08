@@ -161,6 +161,40 @@ test('crossover committee passed -> crossoverWaiting2', () => {
   ]), 'crossoverWaiting2');
 });
 
+// A House bill posts "Passed Third Reading ... Transmitted to the Senate" in the ORIGIN
+// chamber BEFORE the Senate logs receipt. At that instant crossover is not yet detectable
+// from a receiving-chamber line, but the bill has demonstrably left its origin chamber, so
+// the transmit line itself must classify it as crossed over -> crossoverWaiting1.
+test('HB passed 3rd reading + transmitted to Senate (before receipt) -> crossoverWaiting1', () => {
+  assert.equal(clf('HB1', [
+    ['3/10/2026', 'H', 'Passed Third Reading. Ayes, 25. Transmitted to the Senate.'],
+    ['3/6/2026', 'H', 'The committee on AGR recommend that the measure be PASSED, unamended.'],
+    ['1/23/2026', 'H', 'Introduced and Pass First Reading.'],
+  ]), 'crossoverWaiting1');
+});
+test('HB passed 3rd reading as amended + transmitted to Senate (real wording) -> crossoverWaiting1', () => {
+  assert.equal(clf('HB1', [
+    ['3/10/2026', 'H', 'Passed Third Reading as amended in HD 2 with none voting aye with reservations; none voting no (0) and none excused (0). Transmitted to Senate.'],
+    ['1/23/2026', 'H', 'Introduced and Pass First Reading.'],
+  ]), 'crossoverWaiting1');
+});
+test('SB passed 3rd reading + transmitted to House (before receipt) -> crossoverWaiting1', () => {
+  assert.equal(clf('SB1', [
+    ['3/10/2026', 'S', 'Passed Third Reading. Ayes, 25. Transmitted to the House.'],
+    ['1/23/2026', 'S', 'Introduced and Pass First Reading.'],
+  ]), 'crossoverWaiting1');
+});
+test('RETURN trip: HB passed 3rd reading in Senate + transmitted back to House -> passedCommittees', () => {
+  // After crossover, the Senate amends and passes the HB, transmitting it BACK to the House.
+  // Direction is "to the House" (origin), so this is the return trip: passedCommittees, NOT crossover.
+  assert.equal(clf('HB1', [
+    ['4/8/2026', 'S', 'Passed Third Reading in amended form. Transmitted to the House.'],
+    ['3/23/2026', 'S', 'The committee(s) on CPN recommend(s) that the measure be PASSED, WITH AMENDMENTS.'],
+    ['3/6/2026', 'S', 'Received from House (Hse. Com. No. 53).'],
+    ['1/23/2026', 'H', 'Introduced and Pass First Reading.'],
+  ]), 'passedCommittees');
+});
+
 // ---------------------------------------------------------------------------
 // Tier 4 — introduction / re-referral
 // ---------------------------------------------------------------------------

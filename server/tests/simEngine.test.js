@@ -60,16 +60,20 @@ test('Scenario 2 auto: reaches conferenceAssigned by day 5, no actions needed', 
 // ---------------------------------------------------------------------------
 // Scenario 1 user-driven — contact checkpoint (day 2)
 // ---------------------------------------------------------------------------
-test('S1 user: no contact by day 2 -> dead (explicit deferral), stays dead', () => {
+test('S1 user: no contact by day 2 -> dead but STAYS introduced, no deferral line', () => {
+  // The bill enters day 2 still `introduced` (no hearing ever scheduled). Failing
+  // the contact checkpoint must NOT insert a "deferred the measure" line — a
+  // deferral only makes sense once a hearing was scheduled. The bill dies in place.
   const { updates, dead } = buildBillLog(user1, 2, { contacted: false });
   assert.equal(dead, true);
-  assert.equal(isExplicitlyDeferred(updates), true);
-  // later days inject nothing further -> still dead
+  assert.equal(isExplicitlyDeferred(updates), false, 'no deferral line at introduced');
+  assert.equal(stageOf(user1.billNumber, updates), 'introduced', 'stays introduced');
+  // later days inject nothing further -> still dead, still introduced, still no deferral
   const d5 = buildBillLog(user1, 5, { contacted: false });
   assert.equal(d5.dead, true);
-  assert.equal(isExplicitlyDeferred(d5.updates), true);
-  // the newest line is the deferral (no advance past it)
-  assert.match(d5.updates[0].statustext, /deferred the measure/);
+  assert.equal(isExplicitlyDeferred(d5.updates), false);
+  assert.equal(stageOf(user1.billNumber, d5.updates), 'introduced');
+  assert.doesNotMatch(d5.updates[0].statustext, /deferred the measure/);
 });
 
 test('S1 user: contact by day 2 -> scheduled1 (advances like auto)', () => {
@@ -112,10 +116,14 @@ test('S2 user: day 1 auto-advances to waiting2 regardless of testimony', () => {
   }
 });
 
-test('S2 user: no contact by day 3 -> dead (crossover contact checkpoint)', () => {
+test('S2 user: no contact by day 3 -> dead but STAYS crossoverWaiting1, no deferral line', () => {
+  // The crossover contact checkpoint fires while the bill is at crossoverWaiting1
+  // (waiting, not scheduled for a hearing). Like the scenario-1 day-2 contact
+  // gate, failing it kills the bill in place — no deferral line is inserted.
   const { updates, dead } = buildBillLog(user2, 3, { contacted: false });
   assert.equal(dead, true);
-  assert.equal(isExplicitlyDeferred(updates), true);
+  assert.equal(isExplicitlyDeferred(updates), false, 'no deferral line at crossoverWaiting1');
+  assert.equal(stageOf(user2.billNumber, updates), 'crossoverWaiting1', 'stays crossoverWaiting1');
 });
 
 test('S2 user full happy path: reaches passedCommittees by day 4 with all actions', () => {
@@ -150,10 +158,12 @@ test('testify checkpoint entered from a NON-scheduled state does not advance on 
   const scenariosWithEarly = { ...SCENARIOS, earlyTestify: scenarioEarlyTestify };
   const bill = { simId: 'SIM-X', billNumber: 'HB9999', scenario: 'earlyTestify', isAuto: false };
 
-  const { dead } = buildBillLog(bill, 2, { stance: 'support' }, scenariosWithEarly);
+  const { dead, updates } = buildBillLog(bill, 2, { stance: 'support' }, scenariosWithEarly);
   // Support testimony is present, but the bill was NOT scheduled entering day 2,
-  // so it must NOT advance — it dies (deferral) instead of moving to waiting2.
+  // so it must NOT advance — it dies instead of moving to waiting2. Because it
+  // died from an unscheduled state, no deferral line is inserted.
   assert.equal(dead, true, 'early testimony must not advance an unscheduled bill');
+  assert.equal(isExplicitlyDeferred(updates), false, 'no deferral line when dying unscheduled');
 });
 
 test('testify checkpoint entered from a SCHEDULED state advances on support (control)', () => {

@@ -1,18 +1,21 @@
 /**
  * Sim Week action flagger.
  *
+ * `--bill` / `--clear` take the real bill NUMBER (e.g. HB9003), matching what the
+ * dashboard shows; it's resolved to the internal sim id via the roster.
+ *
  * CONTACT (manual JSON flag; the runner reads this before the next scrape):
- *   node scripts/sim/flag.js --bill SIM-03 --action contact
+ *   node scripts/sim/flag.js --bill HB9003 --action contact
  *   node scripts/sim/flag.js --list
- *   node scripts/sim/flag.js --clear SIM-03
+ *   node scripts/sim/flag.js --clear HB9003
  *
  * TESTIMONY (test convenience — inserts real `testimonies` rows against the sim
  * bill so the pass/defer path can be exercised without the front-facing app).
  * The runner tallies ALL testimonies for a bill (majority support vs oppose), so
  * you can simulate a crowd, not just one vote:
- *   node scripts/sim/flag.js --bill SIM-04 --action testify --stance support
- *   node scripts/sim/flag.js --bill SIM-05 --action testify --stance oppose
- *   node scripts/sim/flag.js --bill SIM-06 --action testify --support 7 --oppose 3
+ *   node scripts/sim/flag.js --bill HB9004 --action testify --stance support
+ *   node scripts/sim/flag.js --bill HB9005 --action testify --stance oppose
+ *   node scripts/sim/flag.js --bill HB9006 --action testify --support 7 --oppose 3
  *
  * --stance X is shorthand for one row of X. --support N / --oppose M insert N
  * supporting and M opposing rows (each a distinct author_name) in one call.
@@ -31,7 +34,19 @@ function arg(name) {
   return i === -1 ? undefined : process.argv[i + 1];
 }
 
-const knownSimId = (id) => ROSTER.some((b) => b.simId === id);
+/**
+ * Resolve a user-supplied bill NUMBER (e.g. HB9003) to its internal sim id.
+ * Case-insensitive. Throws if the number isn't in the roster. Also accepts a
+ * raw sim id (SIM-03) as a fallback so older invocations keep working.
+ */
+function resolveSimId(billNumber) {
+  const needle = String(billNumber).trim().toUpperCase();
+  const match = ROSTER.find(
+    (b) => b.billNumber.toUpperCase() === needle || b.simId.toUpperCase() === needle
+  );
+  if (!match) throw new Error(`Unknown bill: ${billNumber}`);
+  return match.simId;
+}
 
 async function main() {
   if (process.argv.includes('--list')) {
@@ -42,22 +57,22 @@ async function main() {
     return;
   }
 
-  const clearId = arg('--clear');
-  if (clearId) {
-    if (!knownSimId(clearId)) throw new Error(`Unknown sim id: ${clearId}`);
-    await clearFlag(clearId);
-    console.log(`Cleared flag for ${clearId}.`);
+  const clearArg = arg('--clear');
+  if (clearArg) {
+    const simId = resolveSimId(clearArg);
+    await clearFlag(simId);
+    console.log(`Cleared flag for ${clearArg}.`);
     return;
   }
 
-  const simId = arg('--bill');
+  const billArg = arg('--bill');
   const action = arg('--action');
-  if (!simId || !action) throw new Error('Usage: --bill SIM-NN --action contact|testify [--stance support|oppose]');
-  if (!knownSimId(simId)) throw new Error(`Unknown sim id: ${simId}`);
+  if (!billArg || !action) throw new Error('Usage: --bill <BILL_NUMBER> --action contact|testify [--stance support|oppose]');
+  const simId = resolveSimId(billArg);
 
   if (action === 'contact') {
     await setContactFlag(simId, new Date().toISOString());
-    console.log(`Flagged ${simId} as CONTACTED. It will advance on the next run-day/cron.`);
+    console.log(`Flagged ${billArg} as CONTACTED. It will advance on the next run-day/cron.`);
     return;
   }
 
@@ -102,7 +117,7 @@ async function main() {
 
     const majority = nSupport > nOppose ? 'support' : 'oppose';
     const outcome = nSupport > nOppose ? 'PASS' : 'be DEFERRED';
-    console.log(`Recorded ${nSupport} support + ${nOppose} oppose testimony for ${simId} (majority ${majority}). It will ${outcome} at its testimony checkpoint on the next run.`);
+    console.log(`Recorded ${nSupport} support + ${nOppose} oppose testimony for ${billArg} (majority ${majority}). It will ${outcome} at its testimony checkpoint on the next run.`);
     return;
   }
 

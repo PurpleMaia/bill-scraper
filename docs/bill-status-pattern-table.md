@@ -74,7 +74,16 @@ If `bothChambers === false`, the whole tier is skipped even if text says "confer
 | # | Regex | → stage | Corpus phrasing |
 |---|---|---|---|
 | 2.1 | `Received from (House\|Senate).*in amended form` | `passedCommittees` | fixture L35 |
-| 2.2 | `Passed (Third\|Final) Reading.*Transmitted`  **AND** `crossover` | `passedCommittees` | fixture L20/L36 |
+| 2.2a | `Passed (Third\|Final) Reading.*Transmitted to (the )?(House\|Senate)`  **AND** destination ≠ `originChamber` | `crossoverWaiting1` | `Passed Third Reading ... Transmitted to Senate.` (HB) |
+| 2.2b | `Passed (Third\|Final) Reading.*Transmitted`  **AND** `crossover` (return trip) | `passedCommittees` | fixture L20/L36 |
+
+> **DOMAIN RULE — outbound transmit vs. return trip (rule 2.2a before 2.2b).** The origin chamber
+> posts `Passed Third Reading ... Transmitted to the <other chamber>` *before* the receiving chamber
+> logs `Received from ...`, so `crossover` is not yet true from a receiving-chamber line. Direction
+> disambiguates: an HB (origin H) `Transmitted to the Senate` is **outbound** → `crossoverWaiting1`
+> (stable with rule 4.1 once receipt is logged); an HB `Transmitted to the House` is the **return
+> trip** after the Senate amended it → `passedCommittees`. When origin is unknown, 2.2a is skipped
+> and 2.2b applies its crossover-gated fallback.
 
 ---
 
