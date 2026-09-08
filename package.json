@@ -17,7 +17,11 @@
     "seed:versions": "node scripts/scraping/seed-versions-reports.js",
     "kysely-codegen": "kysely-codegen --dialect postgres --env-file ./.env --out-file db/generated.d.ts",
     "test": "node --test \"server/**/*.test.js\"",
-    "postinstall": "playwright install chromium"
+    "postinstall": "playwright install chromium",
+    "sim:seed": "node scripts/sim/seed.js",
+    "sim:run": "node scripts/sim/run-day.js",
+    "sim:flag": "node scripts/sim/flag.js",
+    "sim:reset": "node scripts/sim/reset.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
