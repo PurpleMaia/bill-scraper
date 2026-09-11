@@ -20,11 +20,18 @@
 import { db } from '../../db/kysely/client.js';
 import { COMMITTEES, ROSTER, SIM_DATES } from '../../server/services/sim/scenarios.js';
 import { sentinelUrl, runSimDay } from '../../server/services/sim/simRunner.js';
-import { resolveSimUser, ensureFollow } from '../../server/services/sim/simUsers.js';
+import { resolveSimUser, resolveSimUserByEmail, ensureFollow } from '../../server/services/sim/simUsers.js';
 import { seedSimCommittees } from './seed-committees.js';
 
 const force = process.argv.includes('--force');
 const day0Only = process.argv.includes('--day0');
+
+// Extra addresses that should also receive the sim digests/deadline mail. Each
+// gets a `user` row (if missing) and a follow on every sim bill. Their follows
+// are cleaned up by reset.js (it clears user_bills by sim bill_id).
+// For now: just the primary sim user (ALERT_EMAIL). Add 'janine@purplemaia.org'
+// back here once the Resend domain is verified and sending to others works.
+const EXTRA_FOLLOWER_EMAILS = [];
 
 async function main() {
   const urls = ROSTER.map((b) => sentinelUrl(b.simId));
@@ -41,6 +48,15 @@ async function main() {
 
   const user = await resolveSimUser();
   console.log(`Sim user: ${user.email} (${user.id})${user.created ? ' [created]' : ''}`);
+
+  // Additional followers that should get the same sim mail (e.g. janine@).
+  const extraUsers = [];
+  for (const email of EXTRA_FOLLOWER_EMAILS) {
+    const u = await resolveSimUserByEmail(email);
+    console.log(`Extra follower: ${u.email} (${u.id})${u.created ? ' [created]' : ''}`);
+    extraUsers.push(u);
+  }
+  const followers = [user, ...extraUsers];
 
   // Seed the fake sim committees + tagged chair emails (SIM-JHA, SIM-CPN) so a
   // single seed run stands up everything the sim needs. Idempotent.
@@ -83,10 +99,10 @@ async function main() {
       created++;
     }
 
-    await ensureFollow(user.id, billId);
+    for (const f of followers) await ensureFollow(f.id, billId);
   }
 
-  console.log(`Seeded sim bills: ${created} created, ${refreshed} refreshed, ${ROSTER.length} follows ensured.`);
+  console.log(`Seeded sim bills: ${created} created, ${refreshed} refreshed, ${ROSTER.length} bills followed by ${followers.length} user(s).`);
 
   if (day0Only) {
     console.log('Left bills at day-0 (blank) per --day0.');
