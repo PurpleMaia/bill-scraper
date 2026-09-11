@@ -4,15 +4,21 @@
  *
  *   node scripts/sim/run-day.js --date=2026-09-14
  *   node scripts/sim/run-day.js --date=2026-09-16 --dry   # no emails, just report
+ *   node scripts/sim/run-day.js                           # date defaults to TODAY (HST)
  *
  * `--dry` prints the status changes and would-be warnings without sending mail.
  * Emails require RESEND_API_KEY (the notification layer no-ops without it).
+ *
+ * With no `--date`, the date defaults to TODAY in Hawaiʻi (Pacific/Honolulu). This
+ * lets a single daily cron (the 5PM "session over" advance) target the correct sim
+ * day automatically and no-op outside the Sept 14–18 window. The MORNING reminder
+ * is a separate, no-advance "current standings" email — see scripts/sim/standings.js.
  *
  * See docs/superpowers/specs/2026-08-27-sim-week-design.md.
  */
 
 import { db } from '../../db/kysely/client.js';
-import { runSimDay } from '../../server/services/sim/simRunner.js';
+import { runSimDay, simDayFor } from '../../server/services/sim/simRunner.js';
 import { sendDailyDigest } from '../../server/services/notificationService.js';
 import { checkApproachingDeadlines, checkTestimonyDeadlines } from '../../server/services/notifications/deadline-warnings.js';
 import { ROSTER } from '../../server/services/sim/scenarios.js';
@@ -23,7 +29,13 @@ function arg(name) {
   return hit ? hit.split('=')[1] : undefined;
 }
 
-const date = arg('--date');
+/** Today's date as YYYY-MM-DD in Hawaiʻi (UTC−10, no DST). */
+function todayHst() {
+  // en-CA renders ISO YYYY-MM-DD; the tz option shifts "now" into Honolulu.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Honolulu' }).format(new Date());
+}
+
+const date = arg('--date') ?? todayHst();
 const dry = process.argv.includes('--dry');
 
 /** Deadline fetchers scoped to ONLY sim bills, so the demo shows sim deadline mail. */
@@ -54,14 +66,14 @@ async function fetchSimBillsWithStatus() {
 }
 
 async function main() {
-  if (!date) throw new Error('Usage: node scripts/sim/run-day.js --date=YYYY-MM-DD [--dry]');
-
-  const { simDay, statusChanges, summary } = await runSimDay(date);
+  const simDay = simDayFor(date);
   if (simDay === 0) {
     console.log(`${date} is outside the sim window (Sept 14–18). No-op.`);
     await db.destroy();
     return;
   }
+
+  const { statusChanges, summary } = await runSimDay(date);
 
   console.log(`\n=== Sim day ${simDay} (${date}) ===`);
   for (const s of summary) {
