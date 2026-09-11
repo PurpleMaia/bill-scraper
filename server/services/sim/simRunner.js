@@ -111,7 +111,7 @@ export async function runSimDay(dateStr) {
       const contacted = flags[bill.simId]?.action === 'contact';
       const { stance, support, oppose } = await aggregateStance(row.id);
 
-      const { updates, dead: engineDead } = buildBillLog(bill, simDay, { contacted, stance });
+      const { updates, dead: engineDead, committee } = buildBillLog(bill, simDay, { contacted, stance });
       await replaceStatusUpdates(row.id, updates);
 
       const oldStatus = row.bill_status ?? null;
@@ -132,6 +132,7 @@ export async function runSimDay(dateStr) {
         .set({
           bill_status: newStatus,
           dead: newDead,
+          committee_assignment: committee,
           current_status_string: updates[0]?.statustext ?? null,
           updated_at: new Date(),
         })

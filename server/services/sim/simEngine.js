@@ -12,7 +12,7 @@
  * See docs/superpowers/specs/2026-08-27-sim-week-design.md and scenarios.js.
  */
 
-import { SCENARIOS, SIM_DATES } from './scenarios.js';
+import { SCENARIOS, SIM_DATES, COMMITTEES } from './scenarios.js';
 
 /** @typedef {{ chamber: string, date: string, statustext: string }} StatusUpdate */
 
@@ -72,11 +72,14 @@ function stamp(line, date) {
  * @param {Object} [actions]
  * @param {boolean} [actions.contacted] - a contact flag is present
  * @param {('support'|'oppose'|null)} [actions.stance] - normalized testimony stance
- * @returns {{ updates: StatusUpdate[], dead: boolean, reachedStage: string|null }}
+ * @returns {{ updates: StatusUpdate[], dead: boolean, reachedStage: string|null, committee: string }}
  *   updates: newest-first log for the classifier.
  *   dead: true if the bill hit a death line (permanent deferral).
  *   reachedStage: the intended targetStage of the last advancing step (for
  *     assertions / logging; the real classifier is still the source of truth).
+ *   committee: the bill's current committee assignment — the origin committee
+ *     until a successfully-advanced step carries a `committee` (the crossover
+ *     step), after which it is that committee.
  */
 export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) {
   const scenario = scenarios[bill.scenario];
@@ -100,6 +103,9 @@ export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) 
 
   let dead = false;
   let reachedStage = null;
+  // Committee assignment starts at the origin committee and flips only when a
+  // successfully-advanced step carries a `committee` (the crossover step).
+  let committee = COMMITTEES.origin;
 
   for (const step of scenario.steps) {
     if (step.day > day) break;
@@ -117,6 +123,7 @@ export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) 
       for (const line of step.advance) chron.push(stamp(line, date));
       reachedStage = step.targetStage;
       currentStage = step.targetStage; // advance the tracked stage
+      if (step.committee) committee = step.committee; // crossover moves committee
     } else {
       // Checkpoint failed: the bill dies here and stops advancing. A "deferred
       // the measure" line only makes narrative sense once a hearing was actually
@@ -130,5 +137,5 @@ export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) 
     }
   }
 
-  return { updates: chron.reverse(), dead, reachedStage };
+  return { updates: chron.reverse(), dead, reachedStage, committee };
 }

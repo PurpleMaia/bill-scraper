@@ -13,14 +13,14 @@
 import { db } from '../../../db/kysely/client.js';
 
 /**
- * Find or create the user that will receive sim notifications.
- * Uses ALERT_EMAIL (the address the cron already emails). If a user with that
- * email exists, reuse it; otherwise create a minimal sim user.
+ * Find or create a user that will receive sim notifications, by email.
+ * If a user with that email exists, reuse it; otherwise create a minimal sim user.
+ * @param {string} email
+ * @param {string} [username='sim-week']
  * @returns {Promise<{ id: string, email: string, created: boolean }>}
  */
-export async function resolveSimUser() {
-  const email = process.env.ALERT_EMAIL;
-  if (!email) throw new Error('ALERT_EMAIL is not set; cannot resolve sim notification user');
+export async function resolveSimUserByEmail(email, username = 'sim-week') {
+  if (!email) throw new Error('email is required to resolve a sim notification user');
 
   const existing = await db
     .selectFrom('user')
@@ -33,7 +33,7 @@ export async function resolveSimUser() {
     .insertInto('user')
     .values({
       email,
-      username: 'sim-week',
+      username,
       account_status: 'active',
       role: 'user',
       system_role: 'user',
@@ -41,6 +41,17 @@ export async function resolveSimUser() {
     .returning(['id', 'email'])
     .executeTakeFirst();
   return { ...inserted, created: true };
+}
+
+/**
+ * Find or create the primary user that will receive sim notifications.
+ * Uses ALERT_EMAIL (the address the cron already emails).
+ * @returns {Promise<{ id: string, email: string, created: boolean }>}
+ */
+export async function resolveSimUser() {
+  const email = process.env.ALERT_EMAIL;
+  if (!email) throw new Error('ALERT_EMAIL is not set; cannot resolve sim notification user');
+  return resolveSimUserByEmail(email);
 }
 
 /**

@@ -34,6 +34,12 @@
  * @property {('contact'|'testify')} [requiredAction] - checkpoint gate
  * @property {Line} [deathLine]       - committee deferral used when a
  *                                      user-driven bill fails the checkpoint
+ * @property {string} [committee]     - the bill's committee assignment AFTER this
+ *                                      step succeeds. Set on the crossover step so
+ *                                      the bill moves from the origin committee
+ *                                      (COMMITTEE_1) to the receiving one
+ *                                      (COMMITTEE_2). The engine carries the last
+ *                                      such value forward as the current committee.
  */
 /**
  * @typedef {Object} Scenario
@@ -76,14 +82,14 @@ const scenario1 = {
       targetStage: 'scheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-1-26 2:00PM.` },
+        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-15-26 2:00PM.` },
       ],
       deathLine: deferOrigin,
     },
     {
       day: 3,
       label: 'Hearing',
-      targetStage: 'waiting2',
+      targetStage: 'scheduled1',
       requiredAction: 'testify',
       advance: [
         { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} recommend(s) that the measure be PASSED, unamended.` },
@@ -94,6 +100,7 @@ const scenario1 = {
       day: 4,
       label: 'Crossover & Waiting',
       targetStage: 'crossoverWaiting1',
+      committee: COMMITTEE_2, // crossed to the receiving chamber's committee
       advance: [
         { chamber: 'H', statustext: 'Passed Third Reading. Ayes, 25. Transmitted to the Senate.' },
         { chamber: 'S', statustext: `Received from the House. Referred to ${COMMITTEE_2}.` },
@@ -105,7 +112,7 @@ const scenario1 = {
       targetStage: 'crossoverScheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-4-26 2:00PM.` },
+        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-18-26 2:00PM.` },
       ],
       deathLine: deferRecv,
     },
@@ -139,7 +146,7 @@ const scenario2 = {
       // hearing AND passes committee the same day, so scenario-2 bills survive the
       // seed regardless of testimony — the life/death gates come later.
       advance: [
-        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-1-26 2:00PM.` },
+        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-14-26 9:00AM.` },
         { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} recommend(s) that the measure be PASSED, unamended.` },
       ],
     },
@@ -147,6 +154,7 @@ const scenario2 = {
       day: 2,
       label: 'Crossover & Waiting',
       targetStage: 'crossoverWaiting1',
+      committee: COMMITTEE_2, // crossed to the receiving chamber's committee
       advance: [
         { chamber: 'H', statustext: 'Passed Third Reading. Ayes, 25. Transmitted to the Senate.' },
         { chamber: 'S', statustext: `Received from the House. Referred to ${COMMITTEE_2}.` },
@@ -158,7 +166,7 @@ const scenario2 = {
       targetStage: 'crossoverScheduled1',
       requiredAction: 'contact',
       advance: [
-        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-1-26 2:00PM.` },
+        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-17-26 2:00PM.` },
       ],
       deathLine: deferRecv,
     },

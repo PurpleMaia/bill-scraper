@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildBillLog, normalizeStance } from '../services/sim/simEngine.js';
-import { SCENARIOS, ROSTER } from '../services/sim/scenarios.js';
+import { SCENARIOS, ROSTER, COMMITTEES } from '../services/sim/scenarios.js';
 import { classifyStatus } from '../services/statusClassifier.js';
 import { isExplicitlyDeferred } from '../services/dead-bill.js';
 
@@ -36,10 +36,15 @@ test('normalizeStance: oppose / unknown / empty -> oppose (safe default)', () =>
 // ---------------------------------------------------------------------------
 test('Scenario 1 auto: classifier yields intended stage each day, no actions needed', () => {
   const expected = ['introduced', 'scheduled1', 'waiting2', 'crossoverWaiting1', 'crossoverScheduled1'];
+  // Committee flips origin -> receiving at the crossover step (day 4).
+  const expectedCommittee = [
+    COMMITTEES.origin, COMMITTEES.origin, COMMITTEES.origin, COMMITTEES.receiving, COMMITTEES.receiving,
+  ];
   for (let day = 1; day <= 5; day++) {
-    const { updates, dead, reachedStage } = buildBillLog(auto1, day, {}); // no flags/testimony
+    const { updates, dead, reachedStage, committee } = buildBillLog(auto1, day, {}); // no flags/testimony
     assert.equal(dead, false, `auto must never die (day ${day})`);
     assert.equal(reachedStage, expected[day - 1], `reachedStage day ${day}`);
+    assert.equal(committee, expectedCommittee[day - 1], `committee day ${day}`);
     assert.equal(stageOf(auto1.billNumber, updates), expected[day - 1], `classifier day ${day}`);
   }
 });
@@ -49,10 +54,15 @@ test('Scenario 1 auto: classifier yields intended stage each day, no actions nee
 // ---------------------------------------------------------------------------
 test('Scenario 2 auto: reaches conferenceAssigned by day 5, no actions needed', () => {
   const expected = ['waiting2', 'crossoverWaiting1', 'crossoverScheduled1', 'passedCommittees', 'conferenceAssigned'];
+  // Committee flips origin -> receiving at the crossover step (day 2).
+  const expectedCommittee = [
+    COMMITTEES.origin, COMMITTEES.receiving, COMMITTEES.receiving, COMMITTEES.receiving, COMMITTEES.receiving,
+  ];
   for (let day = 1; day <= 5; day++) {
-    const { updates, dead, reachedStage } = buildBillLog(auto2, day, {});
+    const { updates, dead, reachedStage, committee } = buildBillLog(auto2, day, {});
     assert.equal(dead, false, `auto must never die (day ${day})`);
     assert.equal(reachedStage, expected[day - 1], `reachedStage day ${day}`);
+    assert.equal(committee, expectedCommittee[day - 1], `committee day ${day}`);
     assert.equal(stageOf(auto2.billNumber, updates), expected[day - 1], `classifier day ${day}`);
   }
 });
