@@ -764,6 +764,141 @@ export async function sendDailyDigestEmail(toEmail, items) {
   }
 }
 
+// ===========================================================================
+// Current-standings digest — the MORNING reminder. Unlike the daily digest, it
+// shows no status TRANSITION (no old→new); it just restates each followed bill's
+// CURRENT stage, plus any live deadline. Same branded shell and card chrome.
+// Used by scripts/sim/standings.js (Sim Week 5AM reminder), which reads current
+// stages straight from the DB — no re-classification, no writes.
+// ===========================================================================
+
+/** Constant subject for the morning current-standings reminder. */
+export const CURRENT_STANDINGS_SUBJECT = 'Your Hawaiʻi Bill Tracker morning briefing';
+
+/**
+ * One card showing a bill's CURRENT status (a single pill, no transition) plus an
+ * optional live deadline line and a single CTA. Reuses the same helpers as
+ * unifiedCard so the two emails look identical apart from the missing arrow.
+ * @param {{ bill_id: string, bill_number: string, bill_title: string|null, current_status: string|null, warning: object|null, hearing_today: object|null }} item
+ * @param {string} accent
+ */
+function standingsCard(item, accent) {
+  const title = item.bill_title
+    ? `<div class="dm-muted" style="color:${COLOR.muted};font-size:14px;margin-top:2px;">${escapeHtml(item.bill_title)}</div>`
+    : '';
+  const pill = item.current_status
+    ? `<div style="margin-top:8px;line-height:2;">${statusPill(displayLabel(item.current_status), 'old')}</div>`
+    : '';
+  // Same detail rows the daily digest shows below the pill: the raw Capitol status
+  // line (committee/room/time) and the plain-language meaning of the current stage.
+  // Meaning comes straight from stageGuidance(current_status) — no transition needed.
+  const meaning = stageGuidance(item.current_status).meaning;
+  const meaningHtml = meaning
+    ? `<div class="dm-text" style="margin-top:10px;font-size:14px;color:${COLOR.text};line-height:1.5;">${escapeHtml(meaning)}</div>`
+    : '';
+  // Single CTA driven by the current stage (contact vs testify vs view).
+  const action = actionLink(deadlineAction(item.current_status), item.bill_id, accent);
+  return (
+    `<div class="dm-card" style="border:1px solid ${COLOR.border};border-radius:8px;` +
+    `padding:16px 18px;margin-bottom:12px;background-color:${COLOR.white};">` +
+    `<div class="dm-text" style="color:${COLOR.text};font-size:16px;font-weight:700;">${escapeHtml(item.bill_number)}</div>` +
+    title +
+    pill +
+    rawStatusLine(item.raw_status) +
+    hearingTodayBanner(item.hearing_today) +
+    meaningHtml +
+    deadlineLine(item.warning) +
+    action +
+    `</div>`
+  );
+}
+
+/**
+ * Branded HTML for the morning current-standings briefing.
+ * @param {Array<object>} items - current-standings items (see standingsCard)
+ */
+export function buildCurrentStandingsHtml(items) {
+  const list = items ?? [];
+  const accent = COLOR.teal;
+  const count = list.length;
+  return renderEmailShell({
+    accent,
+    title: 'Your morning briefing',
+    subtitle: 'Where the bills you follow stand today',
+    intro:
+      `Current standing${count === 1 ? '' : 's'} for ` +
+      `${count === 1 ? 'the bill you follow' : `the ${count} bills you follow`} — ` +
+      `plus any approaching deadlines:`,
+    cardsHtml: list.map((i) => standingsCard(i, accent)).join(''),
+    ctaLabel: 'View in Hawaiʻi Bill Tracker',
+  });
+}
+
+/**
+ * Plain-text fallback for the morning current-standings briefing.
+ * @param {Array<object>} items
+ */
+export function buildCurrentStandingsBody(items) {
+  const list = items ?? [];
+  const lines = list.map((i) => {
+    const parts = [`${i.bill_number}${i.bill_title ? ` (${i.bill_title})` : ''}: ${displayLabel(i.current_status)}`];
+    if (i.raw_status) parts.push(i.raw_status);
+    const meaning = stageGuidance(i.current_status).meaning;
+    if (meaning) parts.push(meaning);
+    if (i.warning) {
+      parts.push(`deadline: ${i.warning.deadline_name} on ${i.warning.deadline_date} — ${deadlineTiming(i.warning)}`);
+    }
+    return `- ${parts.join(' · ')}`;
+  });
+  return [
+    'Your morning briefing — where the bills you follow stand today:',
+    '',
+    ...lines,
+    '',
+    'You are receiving this because you follow these bills in the Hawaiʻi Bill Tracker.',
+    'Made by Purple Maiʻa Foundation, ʻĀina Foundry, and Hawaiʻi Food+ Policy.',
+  ].join('\n');
+}
+
+/**
+ * Send the morning current-standings briefing to a single user via Resend.
+ * Mirrors sendDailyDigestEmail; fire-and-forget safe.
+ * @param {string} toEmail
+ * @param {Array<object>} items
+ */
+export async function sendCurrentStandingsEmail(toEmail, items) {
+  if (!RESEND_API_KEY) {
+    console.error('[NOTIFY] RESEND_API_KEY not set — skipping current-standings email');
+    return;
+  }
+  if (!toEmail || !items?.length) return;
+
+  const payload = {
+    from: ALERT_FROM,
+    to: [toEmail],
+    subject: CURRENT_STANDINGS_SUBJECT,
+    text: buildCurrentStandingsBody(items),
+    html: buildCurrentStandingsHtml(items),
+  };
+  if (LOGO_ATTACHMENT) payload.attachments = [LOGO_ATTACHMENT];
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[NOTIFY] Resend API error (${response.status}) for ${toEmail}: ${errorText}`);
+    } else {
+      console.log(`[NOTIFY] Morning briefing sent to ${toEmail} (${items.length} bill(s))`);
+    }
+  } catch (error) {
+    console.error(`[NOTIFY] Failed to send morning briefing to ${toEmail}:`, error.message);
+  }
+}
+
 /**
  * Send a bill-update digest email to a single user via Resend.
  * Fire-and-forget safe — catches its own errors so it never crashes the caller.
