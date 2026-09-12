@@ -35,10 +35,10 @@ test('normalizeStance: oppose / unknown / empty -> oppose (safe default)', () =>
 // Scenario 1 auto — full advance regardless of (no) actions, correct stages
 // ---------------------------------------------------------------------------
 test('Scenario 1 auto: classifier yields intended stage each day, no actions needed', () => {
-  const expected = ['introduced', 'scheduled1', 'waiting2', 'crossoverWaiting1', 'crossoverScheduled1'];
-  // Committee flips origin -> receiving at the crossover step (day 4).
+  const expected = ['introduced', 'scheduled1', 'crossoverWaiting1', 'crossoverScheduled1', 'passedCommittees'];
+  // Committee flips origin -> receiving at the crossover step (day 3).
   const expectedCommittee = [
-    COMMITTEES.origin, COMMITTEES.origin, COMMITTEES.origin, COMMITTEES.receiving, COMMITTEES.receiving,
+    COMMITTEES.origin, COMMITTEES.origin, COMMITTEES.receiving, COMMITTEES.receiving, COMMITTEES.receiving,
   ];
   for (let day = 1; day <= 5; day++) {
     const { updates, dead, reachedStage, committee } = buildBillLog(auto1, day, {}); // no flags/testimony
@@ -53,7 +53,7 @@ test('Scenario 1 auto: classifier yields intended stage each day, no actions nee
 // Scenario 2 auto — full advance to conference over 5 days
 // ---------------------------------------------------------------------------
 test('Scenario 2 auto: reaches conferenceAssigned by day 5, no actions needed', () => {
-  const expected = ['waiting2', 'crossoverWaiting1', 'crossoverScheduled1', 'passedCommittees', 'conferenceAssigned'];
+  const expected = ['scheduled1', 'crossoverWaiting1', 'crossoverScheduled1', 'passedCommittees', 'conferenceAssigned'];
   // Committee flips origin -> receiving at the crossover step (day 2).
   const expectedCommittee = [
     COMMITTEES.origin, COMMITTEES.receiving, COMMITTEES.receiving, COMMITTEES.receiving, COMMITTEES.receiving,
@@ -95,10 +95,10 @@ test('S1 user: contact by day 2 -> scheduled1 (advances like auto)', () => {
 // ---------------------------------------------------------------------------
 // Scenario 1 user-driven — testimony checkpoint (day 3)
 // ---------------------------------------------------------------------------
-test('S1 user: support testimony by day 3 -> waiting2 (passes)', () => {
+test('S1 user: support testimony by day 3 -> crossoverWaiting1 (passes + crosses over)', () => {
   const { updates, dead } = buildBillLog(user1, 3, { contacted: true, stance: 'support' });
   assert.equal(dead, false);
-  assert.equal(stageOf(user1.billNumber, updates), 'waiting2');
+  assert.equal(stageOf(user1.billNumber, updates), 'crossoverWaiting1');
 });
 
 test('S1 user: oppose testimony by day 3 -> dead', () => {
@@ -114,26 +114,32 @@ test('S1 user: no testimony by day 3 -> dead (default oppose)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Scenario 2 user-driven — day 1 ALWAYS advances (no gate); the bill survives the
-// seed regardless of testimony so participants have time to act. The first
-// life/death checkpoint is the crossover CONTACT on day 3.
+// Scenario 2 user-driven — day 1 posts the hearing NOTICE (no gate) so the bill
+// survives the seed at scheduled1. Day 2 is the origin TESTIFY checkpoint: support
+// passes it out of committee and it crosses over; no/oppose testimony defers it.
 // ---------------------------------------------------------------------------
-test('S2 user: day 1 auto-advances to waiting2 regardless of testimony', () => {
+test('S2 user: day 1 posts hearing notice -> scheduled1 regardless of testimony', () => {
   for (const stance of ['support', 'oppose', null]) {
     const { updates, dead } = buildBillLog(user2, 1, { stance });
     assert.equal(dead, false, `stance=${stance} must survive day 1`);
-    assert.equal(stageOf(user2.billNumber, updates), 'waiting2', `stance=${stance}`);
+    assert.equal(stageOf(user2.billNumber, updates), 'scheduled1', `stance=${stance}`);
   }
 });
 
-test('S2 user: no contact by day 3 -> dead but STAYS crossoverWaiting1, no deferral line', () => {
-  // The crossover contact checkpoint fires while the bill is at crossoverWaiting1
-  // (waiting, not scheduled for a hearing). Like the scenario-1 day-2 contact
-  // gate, failing it kills the bill in place — no deferral line is inserted.
-  const { updates, dead } = buildBillLog(user2, 3, { contacted: false });
+test('S2 user: support testimony by day 2 -> crossoverWaiting1 (passes + crosses over)', () => {
+  const { updates, dead } = buildBillLog(user2, 2, { stance: 'support' });
+  assert.equal(dead, false);
+  assert.equal(stageOf(user2.billNumber, updates), 'crossoverWaiting1');
+});
+
+test('S2 user: no testimony by day 2 -> dead with a deferral line (at scheduled hearing)', () => {
+  // Day 1 leaves the bill scheduled1; the day-2 testify checkpoint fires AT a hearing,
+  // so failing it (no/oppose testimony) DEFERS the measure — a proper deferral line,
+  // not the PASSED/crossover advance lines.
+  const { updates, dead } = buildBillLog(user2, 2, { stance: null });
   assert.equal(dead, true);
-  assert.equal(isExplicitlyDeferred(updates), false, 'no deferral line at crossoverWaiting1');
-  assert.equal(stageOf(user2.billNumber, updates), 'crossoverWaiting1', 'stays crossoverWaiting1');
+  assert.equal(isExplicitlyDeferred(updates), true, 'deferral line inserted at the hearing');
+  assert.doesNotMatch(updates[0].statustext, /PASSED, unamended/, 'must not show PASSED on a death');
 });
 
 test('S2 user full happy path: reaches passedCommittees by day 4 with all actions', () => {

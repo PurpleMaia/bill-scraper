@@ -105,9 +105,12 @@ async function main() {
   const billById = new Map(bills.map((b) => [b.id, b]));
 
   // Live deadlines/testimony windows, scoped to sim bills — one warning per bill.
+  // Anchor "now" to the SIM date (8:00AM HST), not the real machine clock — otherwise
+  // "hours until the hearing" is computed against the wrong day and prints nonsense.
+  const simNowMs = new Date(`${date}T08:00:00-10:00`).getTime();
   const [approaching, testimony] = await Promise.all([
     checkApproachingDeadlines(date, { fetchBills: fetchSimBills }),
-    checkTestimonyDeadlines(date, { fetchBills: fetchSimBillsWithStatus }),
+    checkTestimonyDeadlines(date, { fetchBills: fetchSimBillsWithStatus, nowMs: simNowMs }),
   ]);
   const warnByBill = new Map();
   const rank = (item, testi) => (testi ? 0 : item.tier === '3' ? 1 : 2);

@@ -82,10 +82,14 @@ async function main() {
     else console.log(`  ${s.simId} ${s.billNumber}: ${s.stage}${s.dead ? ' [DEAD]' : ''}${s.changed ? '  <-- changed' : ''}`);
   }
 
-  // Deadline/testimony warnings scoped to sim bills (for the demo).
+  // Deadline/testimony warnings scoped to sim bills (for the demo). The sim runs on
+  // SIMULATED dates (Sept 14–18), but the machine clock is whatever real day it is —
+  // so "hours until the hearing" must be measured from the SIM day, not Date.now(),
+  // or it prints nonsense like "in ~143 hours". Anchor now to 8:00AM HST on the sim date.
+  const simNowMs = new Date(`${date}T08:00:00-10:00`).getTime();
   const [approaching, testimony] = await Promise.all([
     checkApproachingDeadlines(date, { fetchBills: fetchSimBills }),
-    checkTestimonyDeadlines(date, { fetchBills: fetchSimBillsWithStatus }),
+    checkTestimonyDeadlines(date, { fetchBills: fetchSimBillsWithStatus, nowMs: simNowMs }),
   ]);
   const warnings = [...approaching, ...testimony];
 

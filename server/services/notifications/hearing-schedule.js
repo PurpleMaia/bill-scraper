@@ -59,10 +59,40 @@ export function parseHearingFromText(statustext) {
   return { date, time };
 }
 
+// A hearing scheduling line is SUPERSEDED once the committee has acted on the measure
+// or the bill has moved past that hearing — even if the scheduled date itself hasn't
+// arrived on the calendar (a hearing held and passed the SAME day, or a stale notice a
+// later run leapfrogged). Any of these later status shapes means the hearing is done and
+// must not warn: a committee recommendation/deferral, a floor reading/vote, a transmittal
+// or crossover receipt, or conferee appointments. Same signals dead-bill.js/statusClassifier
+// key on for progression.
+const SUPERSEDING_RE = /recommend|deferred|Passed (First|Second|Third) Reading|Received from the (House|Senate)|Transmitted to|Conferees Appointed|carried over|be PASSED|be HELD|re-referred|referred to/i;
+
+/**
+ * Has the committee acted on / the bill moved past a hearing scheduled for `hearingDate`?
+ * A superseding status line dated on OR after the hearing date means the hearing happened
+ * (or was leapfrogged) and its testimony window is closed. Order-independent: keyed on the
+ * status DATE, not row position (same-date row order is not guaranteed).
+ * @param {Array<{ date?: string, statustext: string }>} statusUpdates
+ * @param {string} hearingDate - YYYY-MM-DD of the scheduled hearing
+ * @returns {boolean}
+ */
+function hearingSuperseded(statusUpdates, hearingDate) {
+  for (const row of statusUpdates ?? []) {
+    if (parseHearingFromText(row.statustext)) continue; // scheduling lines don't supersede
+    if (!SUPERSEDING_RE.test(row.statustext || '')) continue;
+    const rowDate = row.date ? String(row.date).slice(0, 10) : null;
+    if (rowDate && rowDate >= hearingDate) return true;
+  }
+  return false;
+}
+
 /**
  * The bill's next upcoming hearing (on/after `today`) parsed from its status_updates.
  * A bill can have several scheduling lines over the session; we want the earliest
- * hearing that has not yet passed. Returns null if none is upcoming.
+ * hearing that has not yet passed AND has not been superseded by later committee action
+ * (a hearing the committee already acted on is not "upcoming", even on its own date).
+ * Returns null if none is upcoming.
  * @param {Array<{ date?: string, statustext: string }>} statusUpdates
  * @param {string} today - YYYY-MM-DD
  * @returns {{ date: string, time: string|null } | null}
@@ -72,6 +102,7 @@ export function getUpcomingHearing(statusUpdates, today) {
   for (const row of statusUpdates ?? []) {
     const hearing = parseHearingFromText(row.statustext);
     if (!hearing || hearing.date < today) continue; // ignore past hearings
+    if (hearingSuperseded(statusUpdates, hearing.date)) continue; // committee already acted
     if (!best || hearing.date < best.date) best = hearing;
   }
   return best;
