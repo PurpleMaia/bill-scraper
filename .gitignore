@@ -41,3 +41,5 @@ scripts/.sim-pending.json
 session-deadlines-2026.json.bak
 # send-digest-all-users.js transient seed state
 scripts/.send-digest-snapshot.json
+# Local backup of the real app.json while the sim-demo cron config is deployed
+app.json.orig.txt
