@@ -3,7 +3,6 @@ import { startScraping } from './services/scrapingService.js';
 import { sendAlertEmail } from './services/notifications/cron-alerts.js';
 import { sendDailyDigest } from './services/notificationService.js';
 import { checkApproachingDeadlines, checkTestimonyDeadlines } from './services/notifications/deadline-warnings.js';
-import { runSimDay } from './services/sim/simRunner.js';
 import { fetchLivingNonSim, fetchLivingNonSimWithStatus } from './services/sim/simDeadlineFetchers.js';
 
 async function cronScrape() {
@@ -69,21 +68,14 @@ async function cronScrape() {
     // Notify followers of any bill status / dead changes detected this run.
     // Merge changes collected across both chambers. Wrapped so a notification
     // failure never fails the scrape.
-    // Sim Week: if today is within the Sept 14–18 sim window, advance the fake
-    // bills through their scenarios and fold their changes into the digest.
-    // Wrapped and isolated (sentinel test://sim-week/ bills) so it never affects
-    // the real scrape. No-op outside the window. See docs/…/sim-week-design.md.
-    let simChanges = [];
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const sim = await runSimDay(today);
-      simChanges = sim.statusChanges;
-      if (sim.simDay > 0) {
-        console.log(`[MAIN] Sim Week day ${sim.simDay}: ${simChanges.length} change(s) across ${sim.summary.length} sim bill(s).`);
-      }
-    } catch (simErr) {
-      console.error('[MAIN] Sim Week advance failed (ignored):', simErr);
-    }
+    //
+    // Sim Week: the sim board advance is intentionally NOT run here.
+    // It is owned solely by scripts/sim/run-day.js (the 5PM HST cron). Advancing
+    // it here too double-advanced the board and let this scrape consume the sim
+    // status diff, so run-day.js's own sim-scoped follower emails found nothing
+    // to send. The real deadline scan below already excludes sim bills via
+    // fetchLivingNonSim*, so this scrape stays fully sim-free.
+    // See docs/…/sim-week-design.md and server/tests/cronScrapeNoSim.test.js.
 
     // ONE combined daily digest per user: bills that changed status this run OR
     // are approaching a deadline. The deadline SCAN still runs here to find
@@ -94,7 +86,6 @@ async function cronScrape() {
       const allChanges = [
         ...(houseResult?.statusChanges || []),
         ...(senateResult?.statusChanges || []),
-        ...simChanges,
       ];
       // Approaching legislative deadlines (7-day / 3-day) + testimony windows
       // closing. Sim bills are excluded from the real deadline scan: the real
