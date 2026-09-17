@@ -89,10 +89,21 @@ export function buildBillLog(bill, simDay, actions = {}, scenarios = SCENARIOS) 
   /** @type {StatusUpdate[]} oldest-first while building */
   const chron = [];
 
-  // Back-history predates day 1; stamp it one day before the window start.
-  // Any date strictly before SIM_DATES[0] works for ordering; use a fixed lead date.
-  const historyDate = '2026-09-08';
-  for (const line of scenario.history) chron.push(stamp(line, historyDate));
+  // Back-history predates day 1. Stamp each line on a SEPARATE date so the newest
+  // history line wins in the classifier's newest->oldest walk (a single shared date
+  // would leave same-date lines unordered — e.g. scenario 2's "hearing scheduled"
+  // line could be shadowed by "Introduced", classifying to `introduced` instead of
+  // `scheduled1`). Anchor the dates so the LATEST history line lands on 09-13 (the
+  // day before the window opens on SIM_DATES[0]=09-14), with earlier lines on the
+  // preceding days.
+  const HISTORY_ANCHOR = '2026-09-13';
+  const anchorMs = new Date(`${HISTORY_ANCHOR}T00:00:00Z`).getTime();
+  const n = scenario.history.length;
+  scenario.history.forEach((line, i) => {
+    // i=0 (oldest) gets the earliest date; the last line lands exactly on the anchor.
+    const d = new Date(anchorMs - (n - 1 - i) * 86400000).toISOString().slice(0, 10);
+    chron.push(stamp(line, d));
+  });
 
   // The stage the bill is currently in. Testify checkpoints require this to be a
   // scheduled stage. Back-history that schedules a hearing (scenario 2) starts the

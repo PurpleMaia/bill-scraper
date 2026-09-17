@@ -65,19 +65,13 @@ const deferRecv = { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2
  */
 const scenario1 = {
   id: 'scenario1',
-  history: [],
+  history: [
+    { chamber: 'H', statustext: 'Introduced and passed First Reading.' },
+    { chamber: 'H', statustext: `Referred to ${COMMITTEE_1}.` },
+  ],
   steps: [
     {
       day: 1,
-      label: 'Introduced & Waiting',
-      targetStage: 'introduced',
-      advance: [
-        { chamber: 'H', statustext: 'Introduced and passed First Reading.' },
-        { chamber: 'H', statustext: `Referred to ${COMMITTEE_1}.` },
-      ],
-    },
-    {
-      day: 2,
       label: 'Hearing Notice',
       targetStage: 'scheduled1',
       requiredAction: 'contact',
@@ -87,7 +81,7 @@ const scenario1 = {
       deathLine: deferOrigin,
     },
     {
-      day: 3,
+      day: 2,
       label: 'Hearing & Crossover',
       targetStage: 'crossoverWaiting1',
       requiredAction: 'testify',
@@ -100,18 +94,20 @@ const scenario1 = {
       deathLine: deferOrigin,
     },
     {
-      day: 4,
-      label: 'Crossover & Hearing Notice',
+      day: 3,
+      label: 'Crossover Hearing Notice',
       targetStage: 'crossoverScheduled1',
+      requiredAction: 'contact',
       advance: [
-        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-18-26 2:00PM.` },
+        { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-17-26 2:00PM.` },
       ],
+      deathLine: deferOrigin,
     },
     {
-      day: 5,
+      day: 4,
       label: 'Crossover Hearing',
       targetStage: 'passedCommittees',
-      requiredAction: 'contact',
+      requiredAction: 'testify',
       advance: [
         { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} recommend(s) that the measure be PASSED, unamended.` },
         { chamber: 'S', statustext: 'Passed Third Reading in amended form. Transmitted to the House.' },
@@ -122,48 +118,32 @@ const scenario1 = {
 };
 
 /**
- * SCENARIO 2 — first hearing -> crossover -> crossover hearing -> conference.
+ * SCENARIO 2 (compressed) — first hearing -> crossover notice -> crossover hearing.
  * Back-history seeds an introduced+referred bill before day 1.
  *
  * Day 1 posts the first hearing NOTICE (no gate) so a freshly-seeded scenario-2
  * bill starts alive at scheduled1 — nobody dies on day 1 before participants have
- * had a chance to act. Day 2 is the origin-chamber TESTIFY checkpoint: supporting
- * testimony passes it out of committee and it crosses over; otherwise it is
- * deferred at the origin hearing. Day 3 is the crossover CONTACT; day 4 the
- * crossover TESTIFY vote.
+ * had a chance to act. Day 2 is the crossover CONTACT checkpoint (a contact flag
+ * moves it to crossoverScheduled1, else it is deferred at the crossover hearing).
+ * Day 3 is the crossover TESTIFY vote (support -> passedCommittees, else deferred).
  *
- * Checkpoints: day 2 (testify -> pass+crossover / defer), day 3 (contact ->
- * crossoverScheduled1), day 4 (testify -> passedCommittees / defer).
+ * Checkpoints: day 2 (contact -> crossoverScheduled1), day 3 (testify ->
+ * passedCommittees / defer).
  */
 const scenario2 = {
   id: 'scenario2',
   history: [
     { chamber: 'H', statustext: 'Introduced and passed First Reading.' },
     { chamber: 'H', statustext: `Referred to ${COMMITTEE_1}, referral sheet 1.` },
+    { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-14-26 2:00PM.` },
+
   ],
   steps: [
     {
       day: 1,
-      label: 'Hearing Notice',
-      targetStage: 'scheduled1',
-      // No requiredAction: day 1 just POSTS the hearing notice (bill -> scheduled1)
-      // so a freshly-seeded scenario-2 bill starts alive and scheduled. The day-2
-      // testify checkpoint then decides pass-and-crossover vs deferral — and it
-      // needs this to be a SCHEDULED stage to recognize the bill is at a hearing.
-      advance: [
-        { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} has scheduled a public hearing on 09-15-26 9:00AM.` },
-      ],
-    },
-    {
-      day: 2,
-      label: 'Hearing & Crossover',
+      label: 'Hearing and Crossover',
       targetStage: 'crossoverWaiting1',
-      // The day-1 hearing notice leaves the bill `scheduled1` entering today, so
-      // this is the origin-chamber testimony checkpoint: supporting testimony
-      // PASSES it out of committee and it crosses over; no/oppose testimony
-      // DEFERS it at the origin hearing (stays SIM-JHA, no crossover).
       requiredAction: 'testify',
-      committee: COMMITTEE_2, // crossed to the receiving chamber's committee (only on PASS)
       advance: [
         { chamber: 'H', statustext: `The committee(s) on ${COMMITTEE_1} recommend(s) that the measure be PASSED, unamended.` },
         { chamber: 'H', statustext: 'Passed Third Reading. Ayes, 25. Transmitted to the Senate.' },
@@ -172,17 +152,16 @@ const scenario2 = {
       deathLine: deferOrigin,
     },
     {
-      day: 3,
+      day: 2,
       label: 'Crossed Over Hearing Notice',
       targetStage: 'crossoverScheduled1',
       requiredAction: 'contact',
       advance: [
         { chamber: 'S', statustext: `The committee(s) on ${COMMITTEE_2} has scheduled a public hearing on 09-17-26 2:00PM.` },
       ],
-      deathLine: deferRecv,
     },
     {
-      day: 4,
+      day: 3,
       label: 'Crossed Over Hearing',
       targetStage: 'passedCommittees',
       requiredAction: 'testify',
@@ -193,8 +172,8 @@ const scenario2 = {
       deathLine: deferRecv,
     },
     {
-      day: 5,
-      label: 'Conference / Conference Hearing Notice',
+      day: 4,
+      label: 'Conference',
       targetStage: 'conferenceAssigned',
       advance: [
         { chamber: 'H', statustext: 'House disagrees with Senate amendments.' },

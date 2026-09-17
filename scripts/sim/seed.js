@@ -3,23 +3,24 @@
  *
  *   node scripts/sim/seed.js            # create sim bills + follows (refuses if present)
  *   node scripts/sim/seed.js --force    # recreate even if sim bills already exist
- *   node scripts/sim/seed.js --day0     # leave bills blank (no status/stage) — legacy day-0 seed
+ *   node scripts/sim/seed.js --day0     # leave bills blank (no status_updates at all)
  *
  * Bills are isolated by bill_url = test://sim-week/<SIM_ID>.
  *
- * By DEFAULT the seed populates each bill to its DAY-1 stage (Sept 14) by running
- * the real sim engine once, so a freshly seeded board already shows stages
- * (scenario-1 bills at scheduled1, scenario-2 auto bills at waiting2, and
- * scenario-2 user-driven bills DEAD — their day-1 checkpoint is a testimony that
- * hasn't happened yet). Pass --day0 to skip that and leave bills blank the way
- * run-day.js expects to advance them itself.
+ * By DEFAULT the seed populates ONLY each scenario's back-history status_updates
+ * (the pre-window "introduced / referred / [hearing noticed]" lines) and classifies
+ * that history to a starting stage. It does NOT run day 1 and NOTHING dies at seed
+ * time — the day-1 checkpoints are applied later by run-day.js. Pass --day0 to skip
+ * even the history and leave bills fully blank.
  *
  * See docs/superpowers/specs/2026-08-27-sim-week-design.md.
  */
 
 import { db } from '../../db/kysely/client.js';
-import { COMMITTEES, ROSTER, SIM_DATES } from '../../server/services/sim/scenarios.js';
-import { sentinelUrl, runSimDay } from '../../server/services/sim/simRunner.js';
+import { COMMITTEES, ROSTER } from '../../server/services/sim/scenarios.js';
+import { sentinelUrl } from '../../server/services/sim/simRunner.js';
+import { buildBillLog } from '../../server/services/sim/simEngine.js';
+import { classifyStatusWithLLM } from '../../server/services/statusClassifierService.js';
 import { resolveSimUser, resolveSimUserByEmail, ensureFollow } from '../../server/services/sim/simUsers.js';
 import { seedSimCommittees } from './seed-committees.js';
 
@@ -31,7 +32,7 @@ const day0Only = process.argv.includes('--day0');
 // are cleaned up by reset.js (it clears user_bills by sim bill_id).
 // For now: just the primary sim user (ALERT_EMAIL). Add 'janine@purplemaia.org'
 // back here once the Resend domain is verified and sending to others works.
-const EXTRA_FOLLOWER_EMAILS = [];
+const EXTRA_FOLLOWER_EMAILS = ['janine@purplemaia.org'];
 
 async function main() {
   const urls = ROSTER.map((b) => sentinelUrl(b.simId));
@@ -65,6 +66,7 @@ async function main() {
 
   let created = 0;
   let refreshed = 0;
+  const billIds = new Map(); // simId -> bills.id, for history population below
   for (const bill of ROSTER) {
     const url = sentinelUrl(bill.simId);
     const values = {
@@ -100,28 +102,46 @@ async function main() {
     }
 
     for (const f of followers) await ensureFollow(f.id, billId);
+    billIds.set(bill.simId, billId);
   }
 
   console.log(`Seeded sim bills: ${created} created, ${refreshed} refreshed, ${ROSTER.length} bills followed by ${followers.length} user(s).`);
 
   if (day0Only) {
-    console.log('Left bills at day-0 (blank) per --day0.');
+    console.log('Left bills fully blank (no status_updates) per --day0.');
     console.log('Next: node scripts/sim/run-day.js --date=2026-09-14  (or run-week.js)');
     await db.destroy();
     return;
   }
 
-  // Populate every bill to its DAY-1 stage using the real sim engine (same code
-  // run-day.js uses), so a freshly seeded board already shows stages. No email is
-  // sent here — this only writes status_updates + bill_status + dead.
-  const day1 = SIM_DATES[0];
-  const { summary } = await runSimDay(day1);
-  console.log(`\nPopulated day-1 (${day1}) stages:`);
-  for (const s of summary) {
-    if (s.error) console.log(`  ${s.simId}: ERROR ${s.error}`);
-    else console.log(`  ${s.simId} ${s.billNumber}: ${s.stage}${s.dead ? ' [DEAD]' : ''}`);
+  // Populate ONLY the back-history status_updates for each bill (buildBillLog with
+  // simDay 0 returns just the stamped history lines — no steps, nothing dies), then
+  // run the DETERMINISTIC classifier over that history to set the starting stage.
+  // (classifyStatusWithLLM is the deterministic classifier — no LLM/network for the
+  // stage.) Day-1 CHECKPOINTS are NOT applied here; run-day.js does that later.
+  console.log('\nPopulated history-only stages (deterministic classify; no day advanced, nothing dies):');
+  for (const bill of ROSTER) {
+    const billId = billIds.get(bill.simId);
+    const { updates } = buildBillLog(bill, 0);
+    if (updates.length) {
+      await db.insertInto('status_updates').values(
+        updates.map((u) => ({ bill_id: billId, date: u.date, chamber: u.chamber, statustext: u.statustext }))
+      ).execute();
+    }
+    const stage = await classifyStatusWithLLM(billId);
+    await db.updateTable('bills')
+      .set({
+        bill_status: stage,
+        dead: false,
+        committee_assignment: COMMITTEES.origin,
+        current_status_string: updates[0]?.statustext ?? '',
+        updated_at: new Date(),
+      })
+      .where('id', '=', billId)
+      .execute();
+    console.log(`  ${bill.simId} ${bill.billNumber}: ${stage}`);
   }
-  console.log('\nNext: node scripts/sim/run-day.js --date=2026-09-15  (advance to day 2, sends email)');
+  console.log('\nNext: node scripts/sim/run-day.js --date=2026-09-14  (advance to day 1)');
   await db.destroy();
 }
 
