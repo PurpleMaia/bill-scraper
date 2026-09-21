@@ -1,12 +1,12 @@
 {
     "cron": [
         {
-            "command": "node scripts/sim/run-day.js",
-            "schedule": "0 3 * * *"
+            "command": "npm run cron:scrape",
+            "schedule": "0 1 * * *"
         },
         {
-            "command": "node scripts/sim/standings.js",
-            "schedule": "5 15 * * *"
+            "command": "npm run cron:scrape",
+            "schedule": "0 15 * * *"
         }
     ]
 }
